@@ -1,0 +1,26 @@
+{
+  "name": "social-media-poster",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LibruaryNFT/social-media-poster.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/LibruaryNFT/social-media-poster/issues"
+  },
+  "homepage": "https://github.com/LibruaryNFT/social-media-poster#readme",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "mongodb": "^6.15.0",
+    "twitter-api-v2": "^1.22.0"
+  }
+}
