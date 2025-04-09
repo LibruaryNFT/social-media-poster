@@ -13,7 +13,11 @@ This service monitors the Flow blockchain for high-value NFT sales and automatic
 
 1. Clone this repository
 2. Install dependencies with `npm install`
-3. Create a `.env` file based on the example below
+3. Create a `.env` file
 4. Run the service with `node index.js`
 
 ## Environment Variables
+
+## Asset Types
+
+A.edf9df96c92f4595.Pinnacle.NFT through NFTStorefrontV2

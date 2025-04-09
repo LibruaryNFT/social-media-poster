@@ -19,8 +19,13 @@
   },
   "homepage": "https://github.com/LibruaryNFT/social-media-poster#readme",
   "dependencies": {
+    "@onflow/fcl": "^1.15.0",
     "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "fcl-subscribe": "^0.1.9",
     "mongodb": "^6.15.0",
+    "node-fetch": "^2.7.0",
+    "readline": "^1.3.0",
     "twitter-api-v2": "^1.22.0"
   }
 }
