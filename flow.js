@@ -1,29 +1,23 @@
 const fcl = require("@onflow/fcl");
-const fetch = require("node-fetch"); // node-fetch@2 in CommonJS
-const { FLOW_ACCESS_NODE } = require("./config");
+const fetch = require("node-fetch");
+const { FLOW_ACCESS_NODE, FLOW_REST_ENDPOINT } = require("./config");
 
-// Configure FCL
+// 1) FCL uses the Web gRPC domain for event subscriptions & scripts
 fcl.config().put("accessNode.api", FLOW_ACCESS_NODE);
 
 /**
- * Get transaction data directly from Flow API with enhanced logging
- * @param {string} txId - Transaction ID
- * @returns {Promise<Object|null>} Transaction data
+ * getTransactionData, getTransactionResults
+ * - still call rest-mainnet.onflow.org
  */
 async function getTransactionData(txId) {
   try {
-    console.log(`Getting transaction data from Flow API for ${txId}`);
-    const response = await fetch(`${FLOW_ACCESS_NODE}/v1/transactions/${txId}`);
-
-    if (!response.ok) {
-      throw new Error(
-        `API request failed: ${response.status} ${response.statusText}`
-      );
+    console.log(`Getting transaction data from Flow REST for ${txId}`);
+    const resp = await fetch(`${FLOW_REST_ENDPOINT}/v1/transactions/${txId}`);
+    if (!resp.ok) {
+      throw new Error(`API request failed: ${resp.status} ${resp.statusText}`);
     }
+    const txData = await resp.json();
 
-    const txData = await response.json();
-
-    // You can keep or remove the enhanced logs as needed
     console.log("----- TRANSACTION DATA (Partial Logging) -----");
     console.log(`Transaction ID: ${txId}`);
     if (txData.script) {
@@ -38,22 +32,17 @@ async function getTransactionData(txId) {
   }
 }
 
-/**
- * Fetch transaction results (used if you need to read events, etc.)
- * @param {string} txId
- * @returns {Promise<Object|null>}
- */
 async function getTransactionResults(txId) {
   try {
-    const response = await fetch(
-      `${FLOW_ACCESS_NODE}/v1/transaction_results/${txId}`
+    const resp = await fetch(
+      `${FLOW_REST_ENDPOINT}/v1/transaction_results/${txId}`
     );
-    if (!response.ok) {
+    if (!resp.ok) {
       throw new Error(
-        `Tx results request failed: ${response.status} ${response.statusText}`
+        `Tx results request failed: ${resp.status} ${resp.statusText}`
       );
     }
-    return await response.json();
+    return await resp.json();
   } catch (err) {
     console.error("Error fetching transaction results:", err);
     return null;

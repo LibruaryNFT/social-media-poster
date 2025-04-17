@@ -12,3 +12,6 @@ logs
 pids
 *.pid
 *.seed
+# flow
+emulator-account.pkey
+imports

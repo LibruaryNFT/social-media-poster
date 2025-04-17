@@ -21,3 +21,5 @@ This service monitors the Flow blockchain for high-value NFT sales and automatic
 ## Asset Types
 
 A.edf9df96c92f4595.Pinnacle.NFT through NFTStorefrontV2
+A.e4cf4bdc1751c65d.PackNFT.NFT through NFTStorefrontV2
+A.d0bcefdf1e67ea85.HWGarageCardV2.NFT through NFTStorefrontV2
