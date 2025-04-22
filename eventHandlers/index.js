@@ -1,4 +1,4 @@
-// eventHandlers/index.js - FINAL VERSION (Apr 21, 2025) - Strict Conditional Logging
+// eventHandlers/index.js - FINAL VERSION (Apr 22, 2025) - Strict Conditional Logging + Trim Fix
 
 const { getTransactionResults } = require("../flow");
 const { postTweet } = require("../twitter");
@@ -241,7 +241,12 @@ async function handleEvent(event) {
     const rawPrice = parseFloat(
       event.data?.salePrice || event.data?.price || "0"
     );
-    const vaultType = event.data?.salePaymentVaultType || "";
+
+    // --- FIX APPLIED HERE ---
+    // Trim the vaultType string to remove potential leading/trailing whitespace
+    const vaultType = event.data?.salePaymentVaultType?.trim() || ""; // CHANGED: Added .trim()
+    // ------------------------
+
     const evtType = event.type;
     const marketplaceSource = determineMarketplaceSource(evtType);
     let initialNftType =
@@ -262,16 +267,35 @@ async function handleEvent(event) {
       console.error(`Could not get FLOW price for tx ${txId}, skipping.`);
       return;
     }
+
+    // --- Optional Debug Logging ---
+    // console.log(`DEBUG: Comparing vaultType: [${vaultType}] (${typeof vaultType})`);
+    // console.log(`DEBUG: Comparing FLOW_VAULT: [${FLOW_VAULT}] (${typeof FLOW_VAULT})`);
+    // console.log(`DEBUG: Equality Check: ${vaultType === FLOW_VAULT}`);
+    // -----------------------------
+
+    // Calculate priceUSD based on vaultType (using the potentially trimmed vaultType)
     const priceUSD = vaultType === FLOW_VAULT ? rawPrice * flowUsd : rawPrice;
+
+    // --- Optional Debug Logging ---
+    // console.log(`DEBUG: Calculated priceUSD: ${priceUSD}`);
+    // -----------------------------
+
     if (priceUSD <= 0) return;
 
-    // Display price string
+    // Display price string (using the potentially trimmed vaultType for comparison)
     let displayPrice;
     if (vaultType === FLOW_VAULT && rawPrice > 0) {
+      // --- Optional Debug Logging ---
+      // console.log("DEBUG: Entered FLOW_VAULT block for displayPrice");
+      // -----------------------------
       displayPrice = `${rawPrice.toFixed(2)} FLOW (~$${priceUSD.toFixed(
         2
       )} USD)`;
     } else if (rawPrice > 0) {
+      // --- Optional Debug Logging ---
+      // console.log("DEBUG: Entered non-FLOW_VAULT block for displayPrice");
+      // -----------------------------
       const flowEq = priceUSD / flowUsd;
       displayPrice = `$${priceUSD.toFixed(2)} USD (~${flowEq.toFixed(2)} FLOW)`;
     } else {
@@ -310,6 +334,7 @@ async function handleEvent(event) {
     // Map to collection name & check enablement
     const collectionName = mapNftTypeToCollectionName(nftType);
     if (!isEnabled(collectionName)) {
+      // console.log(`DEBUG: Collection ${collectionName} (from type ${nftType}) is disabled, skipping tx ${txId}.`); // Optional debug
       return;
     }
 
@@ -326,7 +351,7 @@ async function handleEvent(event) {
     const handlerArgs = {
       event,
       txResults,
-      displayPrice,
+      displayPrice, // Pass the correctly formatted displayPrice
       marketplaceSource,
       nftType,
       nftId,
@@ -336,7 +361,6 @@ async function handleEvent(event) {
     let tweetedBigSale = false;
     let tweetResPinnacle = null;
     let tweetResBigSale = null;
-    // Removed loggedEvents flag as it's no longer needed here
 
     // --- Pinnacle Bot Logic ---
     const pinnacleBotThreshold = config.PINNACLESALESBOT_THRESHOLD_PINNACLE;
@@ -362,7 +386,6 @@ async function handleEvent(event) {
             tweetResPinnacle.tweetText,
             tweetResPinnacle.imageUrl
           );
-          // *** REMOVED logAllEvents call from here ***
           tweetedPinnacle = true;
         } catch (error) {
           console.error("Error tweeting to PinnacleBot:", error);
@@ -394,6 +417,7 @@ async function handleEvent(event) {
         )} from ${thresholdSource}).`
       );
       if (nftId !== "UnknownNFTID" && nftType !== "Unknown") {
+        // Reuse Pinnacle tweet content if it was already generated for the same event
         if (!tweetResPinnacle) {
           tweetResBigSale = await handlerFn(handlerArgs);
         } else {
@@ -413,7 +437,6 @@ async function handleEvent(event) {
             tweetResBigSale.tweetText,
             tweetResBigSale.imageUrl
           );
-          // *** REMOVED logAllEvents call from here ***
           tweetedBigSale = true;
         } catch (error) {
           console.error("Error tweeting to FlowSalesBot:", error);
@@ -421,7 +444,7 @@ async function handleEvent(event) {
       } else if (
         nftId !== "UnknownNFTID" &&
         nftType !== "Unknown" &&
-        !tweetResBigSale
+        !tweetResBigSale // Check if content generation failed or wasn't needed (because pinnacle failed)
       ) {
         console.warn(
           `FlowSalesBot threshold met for tx ${txId}, but no tweet content generated or reused.`
@@ -438,26 +461,29 @@ async function handleEvent(event) {
         console.log("Cleaned up postedTxIds set.");
       }
     } else if (priceUSD > 0) {
-      // Log sales that didn't meet criteria
-      let applicableThreshold;
-      let thresholdName;
-      if (collectionName === "PINNACLE") {
-        applicableThreshold = Math.min(
-          config.PINNACLESALESBOT_THRESHOLD_PINNACLE,
-          config.FLOWSALESBOT_THRESHOLD_PINNACLE
-        );
-        thresholdName = `PINNACLEBOT ($${config.PINNACLESALESBOT_THRESHOLD_PINNACLE}) / FLOWSALESBOT_PINNACLE ($${config.FLOWSALESBOT_THRESHOLD_PINNACLE})`;
-      } else {
-        applicableThreshold =
-          getFlowSalesBotCollectionThreshold(collectionName);
-        const configKeySuffix =
-          collectionName === "GENERIC_OTHER" || collectionName === "Unknown"
-            ? "OTHERS"
-            : collectionName.toUpperCase();
-        const configKeyName = `FLOWSALESBOT_THRESHOLD_${configKeySuffix}`;
-        thresholdName = `${configKeyName} ($${applicableThreshold.toFixed(2)})`;
-      }
+      // Log sales that didn't meet criteria IF they had valid type/id
       if (nftType !== "Unknown" && nftId !== "UnknownNFTID") {
+        let applicableThreshold;
+        let thresholdName;
+        if (collectionName === "PINNACLE") {
+          applicableThreshold = Math.min(
+            config.PINNACLESALESBOT_THRESHOLD_PINNACLE,
+            config.FLOWSALESBOT_THRESHOLD_PINNACLE
+          );
+          thresholdName = `PINNACLEBOT ($${config.PINNACLESALESBOT_THRESHOLD_PINNACLE}) / FLOWSALESBOT_PINNACLE ($${config.FLOWSALESBOT_THRESHOLD_PINNACLE})`;
+        } else {
+          applicableThreshold =
+            getFlowSalesBotCollectionThreshold(collectionName);
+          const configKeySuffix =
+            collectionName === "GENERIC_OTHER" || collectionName === "Unknown"
+              ? "OTHERS"
+              : collectionName.toUpperCase();
+          const configKeyName = `FLOWSALESBOT_THRESHOLD_${configKeySuffix}`;
+          thresholdName = `${configKeyName} ($${applicableThreshold.toFixed(
+            2
+          )})`;
+        }
+
         console.log(
           `Sale ($${priceUSD.toFixed(
             2
