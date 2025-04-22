@@ -1,40 +1,39 @@
-// config.js
+// config.js - ADDED Debug Logging Flag
 require("dotenv").config();
 
 module.exports = {
   /* ▸ Flow endpoints */
-  FLOW_ACCESS_NODE: "https://mainnet.onflow.org", // No change
-  FLOW_REST_ENDPOINT: "https://rest-mainnet.onflow.org", // No change
+  FLOW_ACCESS_NODE: "https://mainnet.onflow.org",
+  FLOW_REST_ENDPOINT: "https://rest-mainnet.onflow.org",
 
-  /* ▸ USD thresholds */
-  PRICE_THRESHOLD_OTHERS: 5, // Kept for fallback, adjust if needed
-  PRICE_THRESHOLD_TOPSHOT: 100, // Kept for fallback, adjust if needed
-  PRICE_THRESHOLD_TOPSHOT_PACKS: 30, // Kept for fallback, adjust if needed
-  PRICE_THRESHOLD_NFL_PACKS: 30, // Kept for fallback, adjust if needed
-  PRICE_THRESHOLD_HOTWHEELS: 1, // Kept for fallback, adjust if needed
-  PRICE_THRESHOLD_PINNACLE: 25, // UPDATED: Specific threshold for the Pinnacle bot account
-  PRICE_THRESHOLD_BIGSALES: 250, // NEW: Threshold for the Flow Sales Bot account
+  /* ▸ Bot Thresholds (USD) */
+  PINNACLESALESBOT_THRESHOLD_PINNACLE: 50,
+  FLOWSALESBOT_THRESHOLD_PINNACLE: 50,
+  FLOWSALESBOT_THRESHOLD_OTHERS: 10,
+  FLOWSALESBOT_THRESHOLD_TOPSHOT: 100,
+  FLOWSALESBOT_THRESHOLD_TOPSHOT_PACKS: 100,
+  FLOWSALESBOT_THRESHOLD_NFL_PACKS: 100,
+  FLOWSALESBOT_THRESHOLD_NFL_ALLDAY: 100,
+  FLOWSALESBOT_THRESHOLD_HOTWHEELS: 25,
 
   /* ▸ Collection on/off switches */
   ENABLED_COLLECTIONS: [
     "TOPSHOT_MOMENT",
     "TOPSHOT_PACK",
     "NFL_PACK",
+    "NFL_ALLDAY",
     "HOTWHEELS",
     "PINNACLE",
-    "GENERIC_OTHER", // fallback handler
-  ], // No change
+    "GENERIC_OTHER",
+  ],
+
+  DEBUG_LOG_ALL_EVENTS: false,
 
   /* ▸ Twitter credentials */
-  // App Credentials (used by both bots)
   TWITTER_API_KEY: process.env.TWITTER_API_KEY,
   TWITTER_API_SECRET: process.env.TWITTER_API_SECRET,
-
-  // Pinnacle Bot User Credentials (using your preferred names)
   PINNACLEPINBOT_ACCESS_TOKEN: process.env.PINNACLEPINBOT_ACCESS_TOKEN,
   PINNACLEPINBOT_ACCESS_SECRET: process.env.PINNACLEPINBOT_ACCESS_SECRET,
-
-  // Flow Sales Bot User Credentials
   FLOWSALESBOT_ACCESS_TOKEN: process.env.FLOWSALESBOT_ACCESS_TOKEN,
   FLOWSALESBOT_ACCESS_SECRET: process.env.FLOWSALESBOT_ACCESS_SECRET,
 };

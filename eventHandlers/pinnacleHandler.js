@@ -1,4 +1,4 @@
-// eventHandlers/pinnacleHandler.js
+// eventHandlers/pinnacleHandler.js - UPDATED
 const { parseBuyerSellerFromNonFungibleToken } = require("./parseBuyerSeller");
 const fs = require("fs");
 const { fcl } = require("../flow");
@@ -7,18 +7,31 @@ const { fcl } = require("../flow");
 const pinnacleCadence = fs.readFileSync("./flow/pinnacle.cdc", "utf-8");
 const PINNACLE_NFT_TYPE = "A.edf9df96c92f4595.Pinnacle.NFT"; // Define the constant
 
-async function handlePinnacle({ event, txResults, displayPrice }) {
-  const nftId =
-    event.data?.nftID ||
-    event.data?.nftUUID ||
-    event.data?.id ||
-    "UnknownNFTID";
+// UPDATED Signature: Accept new arguments
+async function handlePinnacle({
+  event,
+  txResults,
+  displayPrice,
+  marketplaceSource,
+  nftType,
+  nftId,
+}) {
+  // Use passed nftId and nftType directly
+  const id = nftId;
+  const type = nftType; // Should always be PINNACLE_NFT_TYPE if this handler is called correctly
 
-  // Parse buyer/seller from standard NonFungibleToken events
+  if (!id || id === "UnknownNFTID" || type !== PINNACLE_NFT_TYPE) {
+    console.warn(
+      `Pinnacle handler: Skipping tweet for tx ${event.transactionId}. Incorrect type or missing ID. Type: ${type}, ID: ${id}`
+    );
+    return null;
+  }
+
+  // Parse buyer/seller from standard NonFungibleToken events using refined type/id
   const { seller: rawSeller, buyer } = parseBuyerSellerFromNonFungibleToken(
     txResults.events,
-    PINNACLE_NFT_TYPE, // Use the constant here
-    nftId
+    type, // Use PINNACLE_NFT_TYPE
+    id // Use refined ID
   );
 
   let seller = rawSeller;
@@ -31,15 +44,18 @@ async function handlePinnacle({ event, txResults, displayPrice }) {
   }
 
   // --- Determine address to query the script with ---
-  // Prefer buyer's address if available, otherwise use seller's
-  // This assumes the NFT exists in one of their collections to successfully query metadata
-  const queryAddress = buyer !== "UnknownBuyer" ? buyer : seller;
-  if (queryAddress === "UnknownBuyer" || queryAddress === "UnknownSeller") {
+  const queryAddress =
+    buyer !== "UnknownBuyer"
+      ? buyer
+      : seller !== "UnknownSeller"
+      ? seller
+      : null;
+  if (!queryAddress) {
     console.error(
-      `Cannot query Pinnacle script: No valid buyer or seller address found for NFT ID ${nftId}`
+      `Cannot query Pinnacle script for NFT ID ${id}: No valid buyer or seller address found.`
     );
     const fallbackText = `${displayPrice} SALE on @DisneyPinnacle
-Unknown NFT (ID: ${nftId})
+Unknown Pin (ID: ${id})
 Seller: ${seller}
 Buyer: ${buyer}
 (Could not fetch metadata - address unknown)`;
@@ -51,25 +67,22 @@ Buyer: ${buyer}
   let pinData = null;
   try {
     console.log(
-      `Querying Pinnacle script for NFT ID ${nftId} in collection of ${queryAddress}`
+      `Querying Pinnacle script for NFT ID ${id} in collection of ${queryAddress}`
     );
     pinData = await fcl.query({
       cadence: pinnacleCadence,
-      // Pass the address that likely holds the NFT and the NFT ID
       args: (arg, t) => [
         arg(queryAddress, t.Address),
-        arg(String(nftId), t.UInt64),
+        arg(String(id), t.UInt64), // Use refined ID
       ],
     });
-    // console.log("Pinnacle Script Result:", JSON.stringify(pinData, null, 2)); // Optional: Log raw script output for debugging
   } catch (err) {
     console.error(
-      `Error querying pinnacle script for NFT ${nftId} with address ${queryAddress}:`,
+      `Error querying pinnacle script for NFT ${id} with address ${queryAddress} (Tx: ${event.transactionId}):`,
       err
     );
-    // Fallback tweet if script query fails
     const fallbackText = `${displayPrice} SALE on @DisneyPinnacle
-Unknown NFT (ID: ${nftId})
+Unknown Pin (ID: ${id})
 Seller: ${seller}
 Buyer: ${buyer}
 (Error fetching metadata)`;
@@ -78,10 +91,10 @@ Buyer: ${buyer}
 
   if (!pinData) {
     console.error(
-      `Pinnacle script returned null for NFT ID ${nftId} in collection of ${queryAddress}`
+      `Pinnacle script returned null for NFT ID ${id} in collection of ${queryAddress} (Tx: ${event.transactionId})`
     );
     const fallbackText = `${displayPrice} SALE on @DisneyPinnacle
-Unknown NFT (ID: ${nftId})
+Unknown Pin (ID: ${id})
 Seller: ${seller}
 Buyer: ${buyer}
 (Could not fetch metadata - script returned null)`;
@@ -97,7 +110,6 @@ Buyer: ${buyer}
     const charactersTrait = pinData.traits.find(
       (trait) => trait.name === "Characters"
     );
-    // Ensure value is an array and join, handle cases where it might not be or is empty
     if (
       charactersTrait &&
       Array.isArray(charactersTrait.value) &&
@@ -105,7 +117,6 @@ Buyer: ${buyer}
     ) {
       characters = charactersTrait.value.join(", ");
     } else if (charactersTrait && charactersTrait.value) {
-      // Handle if value is not an array but exists (fallback)
       characters = String(charactersTrait.value);
     }
   }
@@ -113,8 +124,7 @@ Buyer: ${buyer}
   let editionName = "Unknown Edition";
   let maxSupply = "N/A";
   if (pinData.editions && pinData.editions.length > 0) {
-    editionName = pinData.editions[0].name ?? editionName; // Use nullish coalescing
-    // Check if max is not null before converting to string
+    editionName = pinData.editions[0].name ?? editionName;
     if (pinData.editions[0].max != null) {
       maxSupply = pinData.editions[0].max.toString();
     }
@@ -124,30 +134,26 @@ Buyer: ${buyer}
   // --- Construct Tweet ---
   const pinUrl = `https://disneypinnacle.com/pin/${editionID}`;
 
-  // Start building the tweet text
   let tweetLines = [
-    `${displayPrice} SALE on @DisneyPinnacle`,
-    `${editionName}`, // e.g., "Tin Toy [Pixar Animation Studios • Pixar Alien Remix Vol.1, Standard]"
+    `${displayPrice} SALE on @DisneyPinnacle`, // Keeps specific tag, ignores marketplaceSource
+    `${editionName}`,
   ];
 
-  // Add Serial Number line only if it's not null
   if (serialNumber != null) {
     tweetLines.push(`Serial #: ${serialNumber}`);
   }
 
-  // Add other details
   tweetLines.push(`Max Mint: ${maxSupply}`);
-  tweetLines.push(`Character(s): ${characters}`); // e.g., "Alien"
-  tweetLines.push(`Edition ID: ${editionID}`); // e.g., 550
+  tweetLines.push(`Character(s): ${characters}`);
+  tweetLines.push(`Edition ID: ${editionID}`);
   tweetLines.push(`Seller: ${seller}`);
   tweetLines.push(`Buyer: ${buyer}`);
-  tweetLines.push(pinUrl); // Add the pinnacle URL
+  tweetLines.push(pinUrl);
 
   const tweetText = tweetLines.join("\n");
   // ----------------------
 
-  // Currently, pinnacle script doesn't easily provide a direct image URL. Set to null.
-  return { tweetText, imageUrl: null };
+  return { tweetText, imageUrl: null }; // No image from script currently
 }
 
 module.exports = { handlePinnacle };

@@ -1,54 +1,102 @@
-// eventHandlers/fallbackHandler.js
+// eventHandlers/fallbackHandler.js - CORRECTED (Removes '../collections')
 const { parseBuyerSellerFromNonFungibleToken } = require("./parseBuyerSeller");
-const { getTransactionMetadata } = require("../metadata");
+// REMOVED: require('../collections')
+const { getMetadata } = require("../metadata"); // Keep getMetadata
 
 /**
  * handleFallback:
- * if none of the specialized NFT types match,
- * we parse buyer/seller from NonFungibleToken.Withdrawn/Deposited,
- * parse basic metadata, return tweet
+ * Handles generic NFT sales, including those from Flowty or standard NFTStorefrontV2,
+ * when no specialized handler matches the NFT type.
+ * Parses buyer/seller, fetches metadata, and constructs a tweet with marketplace info.
  */
-async function handleFallback({ event, txResults, displayPrice }) {
-  const nftType = event.data?.nftType?.typeID || "UnknownNFTType";
-  const nftId =
-    event.data?.nftID ||
-    event.data?.nftUUID ||
-    event.data?.id ||
-    "UnknownNFTID";
+async function handleFallback({
+  event,
+  txResults,
+  displayPrice,
+  marketplaceSource,
+  nftType,
+  nftId,
+}) {
+  // Use the passed nftType and nftId which might have been refined in index.js
+  const type = nftType;
+  const id = nftId;
 
-  // parse from NonFungibleToken
+  if (
+    type === "UnknownNFTType" ||
+    type === "Unknown" ||
+    !id ||
+    id === "UnknownNFTID"
+  ) {
+    console.warn(
+      `Fallback handler: Skipping tweet for tx ${event.transactionId} due to unknown NFT type or missing ID. Type: ${type}, ID: ${id}`
+    );
+    return null; // Cannot proceed without type/ID
+  }
+
+  // Parse buyer/seller from NonFungibleToken events using refined type/id
   const { seller: rawSeller, buyer } = parseBuyerSellerFromNonFungibleToken(
     txResults.events,
-    nftType,
-    nftId
+    type, // Use refined type
+    id // Use refined ID
   );
 
+  // Attempt to determine seller, falling back to storefront address or event data
   let seller = rawSeller;
-  const storeAddr = event.data?.storefrontAddress || "";
+  const storeAddr = event.data?.storefrontAddress || ""; // Relevant for Storefront/Flowty events
   if (seller === "UnknownSeller" && storeAddr) {
     seller = storeAddr;
   } else if (seller === "UnknownSeller" && event.data?.seller) {
-    seller = event.data.seller;
+    seller = event.data.seller; // Fallback for OfferCompleted etc.
   }
 
-  // getTransactionMetadata => from your fallback logic (fcl.getTransaction)
-  let txMetadata = {};
+  // Fetch metadata using the refined type and ID
+  let metadata = null;
+  // REMOVED: let collection = null;
   try {
-    txMetadata = await getTransactionMetadata(event.transactionId);
+    metadata = await getMetadata(type, id);
+    // REMOVED: collection = findCollectionData(type);
   } catch (err) {
-    console.error("Error in fallback getTransactionMetadata:", err);
+    console.error(
+      // Updated error message slightly
+      `Error fetching metadata for ${type} #${id} in fallback:`,
+      err
+    );
+    // Decide if you want to attempt a tweet with minimal info or bail
   }
 
-  const nftName =
-    txMetadata.name || event.data?.metadata?.name || "Unknown NFT";
-  const imageUrl =
-    txMetadata.imageUrl || event.data?.metadata?.imageUrl || null;
+  // Determine NFT name, collection name, image URL, and external link
+  const nftName = metadata?.name || `NFT #${id}`; // Use ID if name is missing
 
-  const tweetText = `${displayPrice} SALE
-${nftName}
-Seller: ${seller}
-Buyer: ${buyer}
-https://flowscan.io/transaction/${event.transactionId}`;
+  // Derive collection name from the type string (e.g., A.xxxx.ContractName.NFT -> ContractName)
+  let collectionName = "Unknown Collection";
+  try {
+    const parts = type.split(".");
+    if (parts.length >= 3) {
+      collectionName = parts[2]; // Get the contract name part
+    }
+  } catch (e) {
+    /* Ignore errors deriving name */
+  }
+
+  const imageUrl = metadata?.thumbnail || null; // Use only NFT thumbnail from metadata
+  const externalUrl =
+    metadata?.externalURL || // Prefer NFT's external URL
+    `https://flowscan.io/transaction/${event.transactionId}`; // Fallback to Flowscan
+
+  // *** Add Marketplace Tag based on source ***
+  let marketplaceTag = "";
+  if (marketplaceSource === "Flowty") {
+    marketplaceTag = " on @flowty_io";
+  } else if (marketplaceSource === "NFTStorefrontV2") {
+    // Optional: Add tag for the standard storefront if desired
+    // marketplaceTag = " on NFTStorefront";
+  } else if (marketplaceSource === "OffersV2") {
+    marketplaceTag = " via Offer"; // Example tag for offers
+  }
+  // Add other specific marketplace source tags if needed
+
+  // Construct tweet text
+  const tweetText = `${nftName} (${collectionName}) bought for ${displayPrice}${marketplaceTag}! 🎉\n\nSeller: ${seller}\nBuyer: ${buyer}\n\n${externalUrl}`;
 
   return { tweetText, imageUrl };
 }

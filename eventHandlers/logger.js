@@ -1,4 +1,4 @@
-// eventHandlers/logger.js
+// eventHandlers/logger.js - UPDATED (Minor robustness)
 
 const Buffer = require("buffer").Buffer;
 
@@ -17,17 +17,21 @@ function decodeEventPayloadBase64(payloadBase64) {
 
 /**
  * logAllEvents: for debugging, print out each event's type + fully decoded fields if possible.
- * Example usage in your main event handler:
- *   const txResults = await getTransactionResults(txId);
- *   logAllEvents(txResults.events);
+ * Now called conditionally only when a tweet is being sent.
  */
 function logAllEvents(events) {
-  console.log("=== ALL EVENTS in TX ===");
+  // Add check for null/undefined events array
+  if (!events || events.length === 0) {
+    console.log("=== No events provided to logAllEvents ===");
+    return;
+  }
+  console.log("=== ALL EVENTS in TX (Sale met tweet criteria) ==="); // Updated header
   for (const evt of events) {
     const decoded = evt.payload ? decodeEventPayloadBase64(evt.payload) : null;
     console.log(
       `Event type=${evt.type}, decoded=`,
-      JSON.stringify(decoded, null, 2)
+      // Limit stringify depth slightly for very large payloads if needed (optional)
+      JSON.stringify(decoded, null, 2 /*, optional depth limit e.g., 5 */)
     );
   }
   console.log("=== END ALL EVENTS ===");
